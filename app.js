@@ -259,9 +259,16 @@ class APIPlayground {
 
     async loadHosts() {
         try {
-            const response = await fetch(`admin-api.php?action=hosts&t=${Date.now()}`);
-            if (!response.ok) throw new Error('hosts');
-            const data = await response.json();
+            if (typeof StaticRuntime !== 'undefined' && await StaticRuntime.phpAvailable()) {
+                const response = await fetch(`admin-api.php?action=hosts&t=${Date.now()}`);
+                if (!response.ok) throw new Error('hosts');
+                const data = await response.json();
+                this.hosts = Array.isArray(data.hosts) && data.hosts.length ? data.hosts : this.defaultHosts();
+                this.relatedHostList = Array.isArray(data.relatedHosts) ? data.relatedHosts : this.defaultRelatedHosts();
+                return;
+            }
+            if (typeof StaticRuntime === 'undefined') throw new Error('no-static-runtime');
+            const data = await StaticRuntime.loadHostsFile();
             this.hosts = Array.isArray(data.hosts) && data.hosts.length ? data.hosts : this.defaultHosts();
             this.relatedHostList = Array.isArray(data.relatedHosts) ? data.relatedHosts : this.defaultRelatedHosts();
         } catch {
@@ -307,7 +314,15 @@ class APIPlayground {
             pill.textContent = online ? 'Online' : 'Offline';
             pill.className = `host-pill ${online ? 'online' : 'offline'}`;
         }
-        if (status) status.textContent = online ? (`Reachable${data.httpStatus ? ' · HTTP ' + data.httpStatus : ''}`) : (data && data.error ? data.error : 'Unreachable');
+        if (status) {
+            if (online) {
+                if (data.httpStatus) status.textContent = `Reachable · HTTP ${data.httpStatus}`;
+                else if (data.source === 'browser') status.textContent = 'Reachable · browser check';
+                else status.textContent = 'Reachable';
+            } else {
+                status.textContent = (data && data.error) ? data.error : 'Unreachable';
+            }
+        }
         if (ip) ip.textContent = (data && data.ip) ? data.ip : 'Not resolved';
         if (latency) latency.textContent = online && data.latencyMs != null ? `${data.latencyMs} ms` : '—';
     }
@@ -325,9 +340,15 @@ class APIPlayground {
         markChecking(wrap);
         markChecking(relatedWrap);
         try {
-            const response = await fetch(`admin-api.php?action=host-status&t=${Date.now()}`);
-            if (!response.ok) throw new Error('status');
-            const result = await response.json();
+            let result = null;
+            if (typeof StaticRuntime !== 'undefined' && await StaticRuntime.phpAvailable()) {
+                const response = await fetch(`admin-api.php?action=host-status&t=${Date.now()}`);
+                if (response.ok) result = await response.json();
+            }
+            if (!result && typeof StaticRuntime !== 'undefined') {
+                result = await StaticRuntime.probeAll(this.monitoredHosts(), this.relatedHosts());
+            }
+            if (!result) throw new Error('status');
             if (wrap && result.hosts && result.hosts.length) {
                 this.hosts = result.hosts.map((host) => ({ id: host.id, title: host.title, url: host.url }));
                 if (wrap.querySelectorAll('.host-card').length !== result.hosts.length) {
@@ -2694,18 +2715,26 @@ class APIPlayground {
                 throw new Error('Resolve the URL first. Set host (and other variables) in Environment.');
             }
             let data;
-            const proxied = await fetch('proxy.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            });
-            if (proxied.ok) {
-                data = await proxied.json();
-            } else if (proxied.status === 404) {
-                data = await this.directFetch(payload);
+            const usePhp = typeof StaticRuntime === 'undefined' || await StaticRuntime.phpAvailable();
+            if (usePhp) {
+                const proxied = await fetch('proxy.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const proxyMissing = typeof StaticRuntime !== 'undefined'
+                    ? StaticRuntime.isProxyUnavailable(proxied)
+                    : proxied.status === 404;
+                if (proxied.ok && !proxyMissing) {
+                    data = await proxied.json();
+                } else if (proxyMissing) {
+                    data = await this.directFetch(payload);
+                } else {
+                    data = await proxied.json().catch(() => ({ error: `Proxy error ${proxied.status}` }));
+                    if (!data.body && data.error) throw new Error(data.error);
+                }
             } else {
-                data = await proxied.json().catch(() => ({ error: `Proxy error ${proxied.status}` }));
-                if (!data.body && data.error) throw new Error(data.error);
+                data = await this.directFetch(payload);
             }
             this.response = {
                 status: data.status,
@@ -2736,9 +2765,16 @@ class APIPlayground {
     async directFetch(payload) {
         const init = { method: payload.method, headers: payload.headers };
         if (payload.body && !['GET', 'HEAD'].includes(payload.method)) init.body = payload.body;
-        const res = await fetch(payload.url, init);
-        const body = await res.text();
-        return { status: res.status, body, timeMs: null, size: body.length };
+        try {
+            const res = await fetch(payload.url, init);
+            const body = await res.text();
+            const headers = {};
+            res.headers.forEach((value, key) => { headers[key] = value; });
+            return { status: res.status, body, headers, timeMs: null, size: body.length };
+        } catch (err) {
+            const hint = 'Browser blocked the request (CORS). On GitHub Pages there is no PHP proxy — host APIs must allow this origin, or run the app on XAMPP/PHP hosting for proxy.php.';
+            throw new Error(err && err.message ? `${err.message}. ${hint}` : hint);
+        }
     }
 
     captureToken(body) {

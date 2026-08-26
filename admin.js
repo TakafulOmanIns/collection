@@ -219,14 +219,33 @@
             this.closeIconMenu();
         });
         try {
+            if (typeof StaticRuntime !== 'undefined' && !(await StaticRuntime.phpAvailable())) {
+                this.showStaticHostingNotice();
+                return;
+            }
             const session = await this.api('session');
             if (session.ok) await this.enter();
             else this.showLogin();
         } catch {
-            this.showLogin();
+            if (typeof StaticRuntime !== 'undefined' && !(await StaticRuntime.phpAvailable())) {
+                this.showStaticHostingNotice();
+            } else {
+                this.showLogin();
+            }
         } finally {
             this.hideLoader();
         }
+    }
+
+    showStaticHostingNotice() {
+        this.showLogin();
+        const error = document.getElementById('loginError');
+        if (error) {
+            error.textContent = 'Admin needs PHP (XAMPP or PHP hosting). GitHub Pages is static-only — use the public playground (index.html) there. Host status and browsing work without admin.';
+        }
+        document.getElementById('loginForm')?.querySelectorAll('input, button[type="submit"]').forEach((el) => {
+            el.disabled = true;
+        });
     }
 
     showLogin() {
@@ -832,9 +851,16 @@
 
     async loadHosts() {
         try {
-            const result = await this.api('hosts');
-            this.hosts = result.hosts || this.defaultHosts();
-            this.relatedHostList = Array.isArray(result.relatedHosts) ? result.relatedHosts : this.defaultRelatedHosts();
+            if (typeof StaticRuntime !== 'undefined' && await StaticRuntime.phpAvailable()) {
+                const result = await this.api('hosts');
+                this.hosts = result.hosts || this.defaultHosts();
+                this.relatedHostList = Array.isArray(result.relatedHosts) ? result.relatedHosts : this.defaultRelatedHosts();
+                return this.hosts;
+            }
+            if (typeof StaticRuntime === 'undefined') throw new Error('no-static-runtime');
+            const data = await StaticRuntime.loadHostsFile();
+            this.hosts = Array.isArray(data.hosts) && data.hosts.length ? data.hosts : this.defaultHosts();
+            this.relatedHostList = Array.isArray(data.relatedHosts) ? data.relatedHosts : this.defaultRelatedHosts();
         } catch (e) {
             if (!this.hosts.length) this.hosts = this.defaultHosts();
             if (!this.relatedHostList) this.relatedHostList = this.defaultRelatedHosts();
@@ -1055,7 +1081,15 @@
             pill.textContent = online ? 'Online' : 'Offline';
             pill.className = `host-pill ${online ? 'online' : 'offline'}`;
         }
-        if (status) status.textContent = online ? (`Reachable${data.httpStatus ? ' · HTTP ' + data.httpStatus : ''}`) : (data && data.error ? data.error : 'Unreachable');
+        if (status) {
+            if (online) {
+                if (data.httpStatus) status.textContent = `Reachable · HTTP ${data.httpStatus}`;
+                else if (data.source === 'browser') status.textContent = 'Reachable · browser check';
+                else status.textContent = 'Reachable';
+            } else {
+                status.textContent = (data && data.error) ? data.error : 'Unreachable';
+            }
+        }
         if (ip) ip.textContent = (data && data.ip) ? data.ip : 'Not resolved';
         if (latency) latency.textContent = online && data.latencyMs != null ? `${data.latencyMs} ms` : '—';
     }
@@ -1073,7 +1107,14 @@
         markChecking(wrap);
         markChecking(relatedWrap);
         try {
-            const result = await this.api('host-status');
+            let result = null;
+            if (typeof StaticRuntime !== 'undefined' && await StaticRuntime.phpAvailable()) {
+                result = await this.api('host-status');
+            } else if (typeof StaticRuntime !== 'undefined') {
+                result = await StaticRuntime.probeAll(this.monitoredHosts(), this.relatedHosts());
+            } else {
+                result = await this.api('host-status');
+            }
             if (wrap && result.hosts && result.hosts.length && wrap.querySelectorAll('.host-card').length !== result.hosts.length) {
                 this.hosts = result.hosts.map((host) => ({ id: host.id, title: host.title, url: host.url }));
                 wrap.innerHTML = this.monitoredHosts().map((item) => this.hostCardHtml(item)).join('');
@@ -4486,13 +4527,28 @@
             if (!/^https?:\/\//i.test(payload.url) || payload.url.indexOf('{{') >= 0) {
                 throw new Error('Enter a full http(s) URL, or map an environment with host so {{variables}} can be replaced.');
             }
-            const proxied = await fetch('proxy.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            });
-            const data = await proxied.json().catch(() => ({ error: `Proxy error ${proxied.status}` }));
-            if (!proxied.ok && data.error && data.body == null) throw new Error(data.error);
+            let data;
+            const usePhp = typeof StaticRuntime === 'undefined' || await StaticRuntime.phpAvailable();
+            if (usePhp) {
+                const proxied = await fetch('proxy.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const proxyMissing = typeof StaticRuntime !== 'undefined'
+                    ? StaticRuntime.isProxyUnavailable(proxied)
+                    : proxied.status === 404;
+                if (proxied.ok && !proxyMissing) {
+                    data = await proxied.json();
+                } else if (proxyMissing) {
+                    data = await this.directFetch(payload);
+                } else {
+                    data = await proxied.json().catch(() => ({ error: `Proxy error ${proxied.status}` }));
+                    if (!proxied.ok && data.error && data.body == null) throw new Error(data.error);
+                }
+            } else {
+                data = await this.directFetch(payload);
+            }
             this.epResponse = {
                 status: data.status,
                 body: data.body != null ? data.body : (data.error || data),
@@ -4516,6 +4572,23 @@
             if (err) err.textContent = e.message;
         } finally {
             this.render();
+        }
+    }
+
+    async directFetch(payload) {
+        const init = { method: payload.method, headers: payload.headers || {} };
+        if (payload.body && !['GET', 'HEAD'].includes(String(payload.method || '').toUpperCase())) {
+            init.body = payload.body;
+        }
+        try {
+            const res = await fetch(payload.url, init);
+            const body = await res.text();
+            const headers = {};
+            res.headers.forEach((value, key) => { headers[key] = value; });
+            return { status: res.status, body, headers, timeMs: null, size: body.length };
+        } catch (err) {
+            const hint = 'Browser blocked the request (CORS). On GitHub Pages there is no PHP proxy — run admin on XAMPP/PHP hosting, or allow this origin on the API.';
+            throw new Error(err && err.message ? `${err.message}. ${hint}` : hint);
         }
     }
 

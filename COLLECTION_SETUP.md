@@ -113,10 +113,13 @@ Your Postman collection should follow the standard v2.1 format:
 - Check that folders have an `item` array
 - Verify the collection structure matches Postman v2.1 format
 
-**Tree not expanding?**
-- Click the chevron icon or folder name
-- Check browser console for JavaScript errors
-- Try refreshing the page
+**Host status shows “Check failed” on GitHub Pages?**
+- Ensure `static-runtime.js` is loaded and `collection/hosts.json` is published
+- Hard-refresh the browser (cache bust)
+- GitHub Pages has no PHP — status uses a browser reachability check instead of `admin-api.php`
+
+**Admin login fails on GitHub Pages?**
+- Expected: Admin requires PHP (XAMPP or PHP hosting). Use the public playground on Pages.
 
 ## Next Steps
 

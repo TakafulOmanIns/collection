@@ -1,134 +1,78 @@
-# Takaful Oman Insurance - API Collection Viewer
+# Takaful Oman Insurance — API Collection Viewer
 
-A modern, interactive API documentation viewer for sharing Postman collections. Built specifically for Takaful Oman Insurance SAOG.
+Interactive API documentation and playground for Takaful Oman Insurance SAOG Postman collections.
 
-## Features
+## Hosting modes
 
-- 📚 **Three-Column Layout**: Sidebar navigation, main content area, and API explorer
-- 🎨 **Dark Theme**: Modern Postman-inspired dark theme
-- 🔍 **Search Functionality**: Quickly find APIs in large collections
-- 📥 **Download Collections**: Users can download the Postman collection directly
-- 🧪 **API Testing**: Built-in API explorer to test endpoints
-- 🔗 **Shareable Links**: Share collections via URL parameters
-- 📱 **Responsive Design**: Works on different screen sizes
+### GitHub Pages (static — public playground)
 
-## Usage
+GitHub Pages cannot run PHP. The public site (`index.html`) is adapted for static hosting:
 
-### Option 1: Local Collection File
+| Feature | On GitHub Pages |
+|---|---|
+| Browse products / endpoints / docs | Works |
+| Environment drawer (`localStorage`) | Works |
+| Host Online/Offline status | Works via browser reachability + DNS IP |
+| Admin (`admin.html`) | Not available (needs PHP) |
+| Send Request (API tester) | Works only if the target API allows CORS from your Pages origin |
+| Collection / product editing | Keep using XAMPP or PHP hosting, then commit published JSON |
 
-1. Place your Postman collection JSON file as `collection.json` in the root directory
-2. Open `index.html` in a web browser
-3. The collection will load automatically
+**Enable Pages:** Repo → Settings → Pages → Source: Deploy from branch → `main` / root (or `/docs` if you prefer). The repo includes `.nojekyll` so GitHub does not process the site with Jekyll.
 
-### Option 2: Remote Collection URL
+Public URL is typically:
 
-1. Share the link with the collection parameter:
-   ```
-   https://your-domain.com/api_collection/?collection=https://example.com/collection.json
-   ```
+`https://<org-or-user>.github.io/collection/`
 
-2. Users can access the collection directly via the link
+### XAMPP / PHP hosting (full features)
 
-### Option 3: Specific Endpoint
+Place the project under `htdocs` (e.g. `C:\xampp\htdocs\api_collection\`) and open:
 
-You can also link directly to a specific endpoint:
-```
-https://your-domain.com/api_collection/?collection=https://example.com/collection.json&endpoint=0
-```
+`http://localhost/api_collection/`
 
-## Adding Your Logo
+This enables:
 
-1. Place your Takaful Oman Insurance logo as `logo.png` in the root directory
-2. Supported formats: PNG, JPG, SVG
-3. Recommended size: 200x60 pixels (or similar aspect ratio)
-4. If no logo is found, the text "Takaful Oman Insurance SAOG" will be displayed
+- `admin-api.php` — login, uploads, products, docs, host settings
+- Server-side host probing (cURL)
+- `proxy.php` — Send Request without browser CORS limits
 
-## Postman Collection Format
+See `COLLECTION_SETUP.md` for Postman export steps.
 
-The application supports standard Postman Collection v2.1 format. Your collection should include:
+## How host status works
 
-- `info`: Collection metadata (name, description, version)
-- `item`: Array of folders and requests
-- `variable`: Collection variables (e.g., baseUrl)
+1. **With PHP:** `admin-api.php?action=host-status` probes each URL with cURL and resolves IP via `gethostbyname`.
+2. **Without PHP (GitHub Pages):** `static-runtime.js` loads `collection/hosts.json`, resolves A records via Cloudflare DNS-over-HTTPS, and checks reachability from the browser (`fetch`, including `no-cors` when CORS is blocked).
 
-### Example Structure
+Host list source: `collection/hosts.json` (editable in Admin → Host Settings when on PHP).
 
-```json
-{
-  "info": {
-    "name": "My API Collection",
-    "description": "Collection description"
-  },
-  "variable": [
-    {
-      "key": "baseUrl",
-      "value": "https://api.example.com"
-    }
-  ],
-  "item": [
-    {
-      "name": "Folder Name",
-      "item": [
-        {
-          "name": "Endpoint Name",
-          "request": {
-            "method": "GET",
-            "url": "{{baseUrl}}/endpoint"
-          }
-        }
-      ]
-    }
-  ]
-}
-```
+## Send Request on GitHub Pages
 
-## Customization
+Without `proxy.php`, the browser calls APIs directly. If you see a CORS error, either:
 
-### Colors
+- Allow your GitHub Pages origin on the API, or
+- Run the playground on XAMPP/PHP so `proxy.php` can forward the request.
 
-Edit `styles.css` and modify the CSS variables in `:root`:
+## Security note
 
-```css
-:root {
-    --bg-primary: #1e1e1e;
-    --accent-blue: #0070f3;
-    /* ... other variables */
-}
-```
+`collection/env-values.json` and environment files may contain credentials. Do not publish a **public** Pages site or public repo with live secrets. Prefer empty/placeholder values in git and fill them locally via the Environment drawer, or keep the repo private.
 
-### Branding
-
-- Logo: Replace `logo.png`
-- Company name: Edit the logo text in `index.html`
-- Footer: Modify the "Powered by" text in `index.html`
-
-## Browser Support
-
-- Chrome (latest)
-- Firefox (latest)
-- Edge (latest)
-- Safari (latest)
-
-## File Structure
+## Main files
 
 ```
-api_collection/
-├── index.html          # Main HTML file
-├── styles.css          # All styling
-├── app.js              # Application logic
-├── collection.json     # Sample Postman collection
-├── logo.png           # Company logo (add your own)
-└── README.md          # This file
+├── index.html              # Public playground
+├── app.js
+├── static-runtime.js       # GitHub Pages / no-PHP helpers
+├── admin.html / admin.js   # Admin CMS (PHP required)
+├── admin-api.php           # Admin + host-status API
+├── proxy.php               # CORS bypass for Send
+├── products.json
+├── collection/
+│   ├── active.json         # Published collection for the playground
+│   ├── hosts.json          # Monitored hosts
+│   ├── env-values.json
+│   └── docs/pages.json
+└── .nojekyll               # Required for GitHub Pages
 ```
-
-## Development
-
-To run locally:
-
-1. Use a local web server (XAMPP, WAMP, or Python's http.server)
-2. Navigate to the directory in your browser
-3. For XAMPP: `http://localhost/api_collection/`
 
 ## License
 
-© 2024 Takaful Oman Insurance SAOG. All rights reserved.
+© Takaful Oman Insurance SAOG. All rights reserved.
