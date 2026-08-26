@@ -1,0 +1,36 @@
+{
+    "hosts": [
+        {
+            "id": "live",
+            "title": "LIVE Environment",
+            "url": "https://sellonline.takafuloman.om"
+        },
+        {
+            "id": "uat",
+            "title": "UAT Environment",
+            "url": "https://uatsellonline.takafuloman.om"
+        }
+    ],
+    "relatedHosts": [
+        {
+            "id": "motor-claim",
+            "title": "ICAS Portal",
+            "url": "https://claimsonline.takafuloman.om/"
+        },
+        {
+            "id": "inspection",
+            "title": "Inspection",
+            "url": "https://takafulomanpreinspectionlive.azurewebsites.net/"
+        },
+        {
+            "id": "e-insurance",
+            "title": "E-insurance",
+            "url": "https://oman-insurance.com/"
+        },
+        {
+            "id": "whatsapp",
+            "title": "Mehery Portal",
+            "url": "https://takafulinsoman.mehery.com/"
+        }
+    ]
+}

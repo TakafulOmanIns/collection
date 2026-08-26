@@ -1,0 +1,6 @@
+<Files "admin-config.php">
+    Require all denied
+</Files>
+<Files "collection-store.php">
+    Require all denied
+</Files>
