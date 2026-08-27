@@ -1250,12 +1250,20 @@
     return updateItemByPath(items[idx].item, parts, patch);
   }
 
+  /**
+   * Browser-only reachability check (customer → Oman host).
+   * Never uses the API proxy / GitHub — latency reflects the visitor's network.
+   */
   async function probeHost(url, label, title) {
     var host = '';
+    var origin = '';
     try {
-      host = new URL(url).hostname;
+      var parsed = new URL(url);
+      host = parsed.hostname;
+      origin = parsed.origin;
     } catch (e) {
       host = '';
+      origin = String(url || '').trim();
     }
     var started = performance.now();
     var online = false;
@@ -1264,16 +1272,36 @@
     var timer = setTimeout(function () {
       controller.abort();
     }, 8000);
-    try {
-      await fetch(url, {
+    var target = origin || url;
+    var bust = (target.indexOf('?') >= 0 ? '&' : '?') + '_ping=' + Date.now();
+
+    async function attempt(method) {
+      await fetch(target + bust, {
+        method: method,
         mode: 'no-cors',
-        signal: controller.signal,
         cache: 'no-store',
+        credentials: 'omit',
+        redirect: 'follow',
+        signal: controller.signal,
       });
+    }
+
+    try {
+      // HEAD keeps the probe light (no HTML download). Some hosts reject HEAD → fall back to GET.
+      try {
+        await attempt('HEAD');
+      } catch (headErr) {
+        if (controller.signal.aborted) throw headErr;
+        await attempt('GET');
+      }
       online = true;
     } catch (e) {
       online = false;
-      error = (e && e.message) || 'Could not reach host';
+      if (controller.signal.aborted) {
+        error = 'Timed out';
+      } else {
+        error = (e && e.message) || 'Unreachable';
+      }
     } finally {
       clearTimeout(timer);
     }
@@ -1289,21 +1317,21 @@
       latencyMs: online ? ms : null,
       error: error,
       checkedAt: isoNow(),
+      checkedFrom: 'browser',
     };
   }
 
   async function probeAllHosts() {
     var hosts = await loadHosts();
     var related = await loadRelatedHosts();
-    var probed = [];
-    for (var i = 0; i < hosts.length; i++) {
-      probed.push(await probeHost(hosts[i].url, hosts[i].id, hosts[i].title));
-    }
-    var relatedProbed = [];
-    for (var j = 0; j < related.length; j++) {
-      relatedProbed.push(await probeHost(related[j].url, related[j].id, related[j].title));
-    }
-    return { ok: true, hosts: probed, relatedHosts: relatedProbed };
+    var hostJobs = hosts.map(function (item) {
+      return probeHost(item.url, item.id, item.title);
+    });
+    var relatedJobs = related.map(function (item) {
+      return probeHost(item.url, item.id, item.title);
+    });
+    var results = await Promise.all([Promise.all(hostJobs), Promise.all(relatedJobs)]);
+    return { ok: true, hosts: results[0], relatedHosts: results[1] };
   }
 
   async function loadHostsPublic() {
@@ -1940,6 +1968,21 @@
     }
   }
 
+  async function resolveProxyUrl() {
+    try {
+      await global.GitHubStore.ensureConfig();
+      var cfg = global.GitHubStore.getSiteConfig() || {};
+      if (cfg.proxyUrl) return String(cfg.proxyUrl).trim();
+    } catch (e) { /* ignore */ }
+    try {
+      var host = (global.location && global.location.hostname) || '';
+      if (/^(localhost|127\.0\.0\.1)$/i.test(host)) {
+        return 'http://127.0.0.1:8787/';
+      }
+    } catch (e2) { /* ignore */ }
+    return '';
+  }
+
   async function proxyRequest(payload) {
     payload = payload || {};
     var url = String(payload.url || '').trim();
@@ -1953,6 +1996,37 @@
     if (allowedMethods.indexOf(method) === -1) {
       throw apiError('Unsupported method', 400);
     }
+
+    var proxyUrl = await resolveProxyUrl();
+    if (proxyUrl) {
+      try {
+        var proxied = await fetch(proxyUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: url,
+            method: method,
+            headers: headersIn,
+            body: body,
+          }),
+        });
+        var data = await proxied.json().catch(function () {
+          return { error: 'Proxy error ' + proxied.status };
+        });
+        if (!proxied.ok && data.error && data.body == null) {
+          throw apiError(data.error, proxied.status || 502);
+        }
+        return data;
+      } catch (err) {
+        if (err && err.status) throw err;
+        var hint =
+          'Proxy unreachable at ' +
+          proxyUrl +
+          '. Start it with: node proxy-server.js';
+        throw apiError((err && err.message ? err.message + ' — ' : '') + hint, 502);
+      }
+    }
+
     var headers = {};
     if (headersIn && typeof headersIn === 'object') {
       if (Array.isArray(headersIn)) {
@@ -1975,21 +2049,29 @@
     if (body != null && body !== '' && method !== 'GET' && method !== 'HEAD') {
       init.body = typeof body === 'string' ? body : JSON.stringify(body);
     }
-    var res = await fetch(url, init);
-    var responseBody = await res.text();
-    var headerMap = {};
-    if (res.headers && typeof res.headers.forEach === 'function') {
-      res.headers.forEach(function (value, key) {
-        headerMap[key] = value;
-      });
+    try {
+      var res = await fetch(url, init);
+      var responseBody = await res.text();
+      var headerMap = {};
+      if (res.headers && typeof res.headers.forEach === 'function') {
+        res.headers.forEach(function (value, key) {
+          headerMap[key] = value;
+        });
+      }
+      return {
+        status: res.status,
+        headers: headerMap,
+        body: responseBody,
+        timeMs: Math.round(performance.now() - started),
+        size: responseBody.length,
+      };
+    } catch (err) {
+      throw apiError(
+        'Browser blocked the request (CORS). GitHub Pages cannot proxy APIs. ' +
+          'Set proxyUrl in site-config.json (see proxy-worker.js) or run: node proxy-server.js',
+        502
+      );
     }
-    return {
-      status: res.status,
-      headers: headerMap,
-      body: responseBody,
-      timeMs: Math.round(performance.now() - started),
-      size: responseBody.length,
-    };
   }
 
   global.StaticAPI = {

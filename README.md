@@ -51,11 +51,37 @@ Admin **saves** from localhost still commit to GitHub (same token rules). They d
 
 ## Try-it / API calls
 
-There is no server-side CORS proxy anymore. The playground calls APIs **directly from the browser**. Target APIs must allow CORS from your Pages origin (or be same-site). If a call fails with a network/CORS error, enable CORS on that API or use a private proxy you control.
+Takaful APIs do not send `Access-Control-Allow-Origin`, so the browser cannot call them directly from GitHub Pages. A small proxy is required (same role as the old `proxy.php`).
+
+### Local
+
+```bash
+node proxy-server.js
+```
+
+Then open the site on `http://127.0.0.1:8080` (or any local static server). On localhost the app uses `http://127.0.0.1:8787/` automatically.
+
+### GitHub Pages
+
+1. Deploy the Cloudflare Worker once:
+
+```bash
+npx wrangler deploy proxy-worker.js --name collection-api-proxy --compatibility-date 2024-01-01
+```
+
+2. Put the worker URL in `site-config.json`:
+
+```json
+{
+  "proxyUrl": "https://collection-api-proxy.<your-subdomain>.workers.dev"
+}
+```
+
+3. Commit and push so Pages picks up the config.
 
 ## Host status cards
 
-Status checks run in the browser (`no-cors` probes). You get online/offline and latency; public IP and HTTP status codes are not available without a server.
+Hosts and related hosts are pinged **from the visitor’s browser** (parallel `HEAD`/`GET` with `no-cors`) straight to the Oman endpoints—not via GitHub or the API proxy—so latency matches what customers in Oman see. Status shows reachable/unreachable and round-trip time; hostname is shown instead of public IP (browsers cannot resolve remote A records).
 
 ## Main files
 

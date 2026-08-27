@@ -3,5 +3,6 @@
     "owner": "TakafulOmanIns",
     "repo": "collection",
     "branch": "main"
-  }
+  },
+  "proxyUrl": ""
 }

@@ -1017,7 +1017,7 @@
                 <a class="host-url" href="${this.escape(item.url)}" target="_blank" rel="noopener">${this.escape(item.url)}</a>
                 <dl class="host-meta">
                     <div><dt>Status</dt><dd data-host-status>—</dd></div>
-                    <div><dt>Public IP</dt><dd data-host-ip>—</dd></div>
+                    <div><dt>Host</dt><dd data-host-ip>—</dd></div>
                     <div><dt>Latency</dt><dd data-host-latency>—</dd></div>
                 </dl>
             </article>
@@ -1044,8 +1044,12 @@
             pill.textContent = online ? 'Online' : 'Offline';
             pill.className = `host-pill ${online ? 'online' : 'offline'}`;
         }
-        if (status) status.textContent = online ? (`Reachable${data.httpStatus ? ' · HTTP ' + data.httpStatus : ''}`) : (data && data.error ? data.error : 'Unreachable');
-        if (ip) ip.textContent = (data && data.ip) ? data.ip : 'Not resolved';
+        if (status) {
+            status.textContent = online
+                ? 'Reachable from your browser'
+                : (data && data.error ? data.error : 'Unreachable');
+        }
+        if (ip) ip.textContent = (data && data.host) ? data.host : '—';
         if (latency) latency.textContent = online && data.latencyMs != null ? `${data.latencyMs} ms` : '—';
     }
 
@@ -1062,7 +1066,11 @@
         markChecking(wrap);
         markChecking(relatedWrap);
         try {
-            const result = await this.api('host-status');
+            if (!window.StaticAPI || typeof window.StaticAPI.probeHosts !== 'function') {
+                throw new Error('Browser probe unavailable');
+            }
+            // Browser-only: visitor → Oman hosts (not GitHub / API proxy)
+            const result = await window.StaticAPI.probeHosts();
             if (wrap && result.hosts && result.hosts.length && wrap.querySelectorAll('.host-card').length !== result.hosts.length) {
                 this.hosts = result.hosts.map((host) => ({ id: host.id, title: host.title, url: host.url }));
                 wrap.innerHTML = this.monitoredHosts().map((item) => this.hostCardHtml(item)).join('');
