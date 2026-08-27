@@ -1017,7 +1017,7 @@
                 <a class="host-url" href="${this.escape(item.url)}" target="_blank" rel="noopener">${this.escape(item.url)}</a>
                 <dl class="host-meta">
                     <div><dt>Status</dt><dd data-host-status>—</dd></div>
-                    <div><dt>Host</dt><dd data-host-ip>—</dd></div>
+                    <div><dt>Public IP</dt><dd data-host-ip>—</dd></div>
                     <div><dt>Latency</dt><dd data-host-latency>—</dd></div>
                 </dl>
             </article>
@@ -1044,12 +1044,8 @@
             pill.textContent = online ? 'Online' : 'Offline';
             pill.className = `host-pill ${online ? 'online' : 'offline'}`;
         }
-        if (status) {
-            status.textContent = online
-                ? 'Reachable from your browser'
-                : (data && data.error ? data.error : 'Unreachable');
-        }
-        if (ip) ip.textContent = (data && data.host) ? data.host : '—';
+        if (status) status.textContent = online ? (`Reachable${data.httpStatus ? ' · HTTP ' + data.httpStatus : ''}`) : (data && data.error ? data.error : 'Unreachable');
+        if (ip) ip.textContent = (data && data.ip) ? data.ip : 'Not resolved';
         if (latency) latency.textContent = online && data.latencyMs != null ? `${data.latencyMs} ms` : '—';
     }
 

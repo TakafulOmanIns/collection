@@ -81,7 +81,7 @@ npx wrangler deploy proxy-worker.js --name collection-api-proxy --compatibility-
 
 ## Host status cards
 
-Hosts and related hosts are pinged **from the visitor’s browser** (parallel `HEAD`/`GET` with `no-cors`) straight to the Oman endpoints—not via GitHub or the API proxy—so latency matches what customers in Oman see. Status shows reachable/unreachable and round-trip time; hostname is shown instead of public IP (browsers cannot resolve remote A records).
+Hosts and related hosts are pinged **from the visitor’s browser** straight to the Oman endpoints (not via GitHub or the API proxy). Public IP is resolved in the browser via DNS-over-HTTPS; latency is measured from the customer’s network.
 
 ## Main files
 

@@ -1251,6 +1251,36 @@
   }
 
   /**
+   * Resolve A record via DNS-over-HTTPS (browser-side) so Public IP can show
+   * without a server-side probe.
+   */
+  async function resolvePublicIp(hostname) {
+    if (!hostname) return null;
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)) return hostname;
+    if (hostname.indexOf(':') >= 0) return null;
+    try {
+      var res = await fetch(
+        'https://cloudflare-dns.com/dns-query?name=' + encodeURIComponent(hostname) + '&type=A',
+        {
+          headers: { Accept: 'application/dns-json' },
+          cache: 'no-store',
+        }
+      );
+      if (!res.ok) return null;
+      var data = await res.json();
+      var answers = data && Array.isArray(data.Answer) ? data.Answer : [];
+      for (var i = 0; i < answers.length; i++) {
+        if (answers[i] && Number(answers[i].type) === 1 && answers[i].data) {
+          return String(answers[i].data);
+        }
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
    * Browser-only reachability check (customer → Oman host).
    * Never uses the API proxy / GitHub — latency reflects the visitor's network.
    */
@@ -1274,6 +1304,7 @@
     }, 8000);
     var target = origin || url;
     var bust = (target.indexOf('?') >= 0 ? '&' : '?') + '_ping=' + Date.now();
+    var ipPromise = resolvePublicIp(host);
 
     async function attempt(method) {
       await fetch(target + bust, {
@@ -1287,7 +1318,6 @@
     }
 
     try {
-      // HEAD keeps the probe light (no HTML download). Some hosts reject HEAD → fall back to GET.
       try {
         await attempt('HEAD');
       } catch (headErr) {
@@ -1306,12 +1336,18 @@
       clearTimeout(timer);
     }
     var ms = Math.round(performance.now() - started);
+    var ip = null;
+    try {
+      ip = await ipPromise;
+    } catch (e2) {
+      ip = null;
+    }
     return {
       id: label,
       title: title || '',
       url: url,
       host: host,
-      ip: null,
+      ip: ip,
       online: online,
       httpStatus: null,
       latencyMs: online ? ms : null,
@@ -1974,12 +2010,26 @@
       var cfg = global.GitHubStore.getSiteConfig() || {};
       if (cfg.proxyUrl) return String(cfg.proxyUrl).trim();
     } catch (e) { /* ignore */ }
+
+    var local = 'http://127.0.0.1:8787/';
+    // Prefer a running local proxy for any origin (localhost, LAN, file://, Live Server).
+    try {
+      var ctrl = new AbortController();
+      var timer = setTimeout(function () {
+        ctrl.abort();
+      }, 900);
+      var health = await fetch(local + 'health', { method: 'GET', cache: 'no-store', signal: ctrl.signal });
+      clearTimeout(timer);
+      if (health.ok) return local;
+    } catch (e2) { /* proxy not running */ }
+
     try {
       var host = (global.location && global.location.hostname) || '';
-      if (/^(localhost|127\.0\.0\.1)$/i.test(host)) {
-        return 'http://127.0.0.1:8787/';
+      var protocol = (global.location && global.location.protocol) || '';
+      if (protocol === 'file:' || /^(localhost|127\.0\.0\.1)$/i.test(host)) {
+        return local;
       }
-    } catch (e2) { /* ignore */ }
+    } catch (e3) { /* ignore */ }
     return '';
   }
 
