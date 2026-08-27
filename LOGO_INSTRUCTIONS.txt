@@ -1,0 +1,23 @@
+LOGO SETUP INSTRUCTIONS
+=======================
+
+To add your Takaful Oman Insurance logo:
+
+1. Place your logo file in this directory with the name: logo.png
+
+2. Supported formats:
+   - PNG (recommended)
+   - JPG/JPEG
+   - SVG
+
+3. Recommended dimensions:
+   - Width: 200-300 pixels
+   - Height: 60-80 pixels
+   - Aspect ratio: approximately 3:1 or 4:1
+
+4. If no logo is found, the application will automatically display:
+   "Takaful Oman Insurance SAOG" as text
+
+5. The logo will appear in the top-left of the sidebar navigation
+
+For best results, use a logo with a transparent background (PNG) or one that matches the dark theme.

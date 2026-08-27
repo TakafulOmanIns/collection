@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Takaful Oman — API Playground</title>
+    <link rel="icon" href="images/favicon.ico" type="image/x-icon">
+    <link rel="shortcut icon" href="images/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="styles.css?v=mobile-nav">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Nunito+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="loader-overlay" id="loaderOverlay">
+        <div class="loader-cover">
+            <div class="loader">
+                <img src="images/loader.png" alt="Takaful Oman">
+            </div>
+        </div>
+    </div>
+
+    <div class="wave-bg" aria-hidden="true"></div>
+
+    <div class="app">
+        <div class="shell" id="playShell">
+            <aside class="sidebar" id="sidebar">
+                <div class="sidebar-top">
+                    <a class="play-brand" href="https://takafuloman.om/en" target="_blank" rel="noopener" title="Takaful Oman">
+                        <img src="images/takaful-logo.png" alt="Takaful Oman" class="brand-logo">
+                    </a>
+                </div>
+                <nav class="sidebar-nav" id="apiNavContent"></nav>
+            </aside>
+            <div class="play-main">
+                <header class="topbar">
+                    <button class="icon-btn menu-toggle" id="menuToggle" type="button" aria-label="Open navigation" aria-expanded="false">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                            <path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                        </svg>
+                    </button>
+                    <nav class="admin-tabs" aria-label="Playground">
+                        <button class="tab-btn active" id="homeBtn" type="button">Products &amp; services</button>
+                    </nav>
+                    <div class="topbar-actions">
+                        <button class="ghost-btn" id="envBtn" type="button" title="Environment variables">
+                            Environment
+                            <span class="env-dot" id="envDot"></span>
+                        </button>
+                    </div>
+                </header>
+                <div class="workspace-shell">
+                    <div class="workspace-loader is-hidden" id="workspaceLoader" aria-hidden="true">
+                        <div class="loader-cover">
+                            <div class="loader">
+                                <img src="images/loader.png" alt="Takaful Oman">
+                            </div>
+                        </div>
+                    </div>
+                    <main class="workspace" id="workspace"></main>
+                </div>
+            </div>
+            <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+        </div>
+    </div>
+
+    <aside class="drawer" id="envDrawer" aria-hidden="true">
+        <div class="drawer-panel">
+            <div class="drawer-head">
+                <div>
+                    <h2>Environment</h2>
+                    <p>Browser overrides take priority. Empty fields use the environment mapped to the current product in Admin.</p>
+                </div>
+                <button class="icon-btn" id="closeEnvBtn" type="button" aria-label="Close environment">
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M5 5l8 8M13 5l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                </button>
+            </div>
+            <div class="drawer-body" id="envBody"></div>
+            <div class="drawer-foot">
+                <button class="ghost-btn" id="addEnvBtn" type="button">Add variable</button>
+                <button class="primary-btn" id="saveEnvBtn" type="button">Save</button>
+            </div>
+        </div>
+    </aside>
+
+    <div class="env-tip hidden" id="envTip">
+        <div class="env-tip-row">
+            <input id="envTipValue" type="text" autocomplete="off" aria-label="Environment value">
+            <button class="primary-btn small" id="envTipSave" type="button">Save</button>
+        </div>
+    </div>
+
+    <script src="handlebars.min.js"></script>
+    <script src="json-viewer.js"></script>
+    <script src="app.js?v=mobile-nav"></script>
+</body>
+</html>
