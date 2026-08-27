@@ -1251,38 +1251,57 @@
   }
 
   /**
-   * Resolve A record via DNS-over-HTTPS (browser-side) so Public IP can show
-   * without a server-side probe.
+   * Resolve the host's public A record in the browser (for the Public IP field).
+   * Latency itself is always measured by pinging the host directly from the visitor.
    */
   async function resolvePublicIp(hostname) {
     if (!hostname) return null;
     if (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)) return hostname;
     if (hostname.indexOf(':') >= 0) return null;
-    try {
-      var res = await fetch(
-        'https://cloudflare-dns.com/dns-query?name=' + encodeURIComponent(hostname) + '&type=A',
-        {
-          headers: { Accept: 'application/dns-json' },
-          cache: 'no-store',
-        }
-      );
-      if (!res.ok) return null;
-      var data = await res.json();
+
+    function pickA(data) {
       var answers = data && Array.isArray(data.Answer) ? data.Answer : [];
       for (var i = 0; i < answers.length; i++) {
         if (answers[i] && Number(answers[i].type) === 1 && answers[i].data) {
-          return String(answers[i].data);
+          return String(answers[i].data).replace(/\.$/, '');
         }
       }
       return null;
-    } catch (e) {
-      return null;
     }
+
+    var endpoints = [
+      {
+        url: 'https://dns.google/resolve?name=' + encodeURIComponent(hostname) + '&type=A',
+        headers: {},
+      },
+      {
+        url: 'https://cloudflare-dns.com/dns-query?name=' + encodeURIComponent(hostname) + '&type=A',
+        headers: { Accept: 'application/dns-json' },
+      },
+    ];
+
+    for (var e = 0; e < endpoints.length; e++) {
+      try {
+        var res = await fetch(endpoints[e].url, {
+          method: 'GET',
+          headers: endpoints[e].headers,
+          cache: 'no-store',
+          credentials: 'omit',
+        });
+        if (!res.ok) continue;
+        var ip = pickA(await res.json());
+        if (ip) return ip;
+      } catch (err) {
+        /* try next resolver */
+      }
+    }
+    return null;
   }
 
   /**
-   * Browser-only reachability check (customer → Oman host).
-   * Never uses the API proxy / GitHub — latency reflects the visitor's network.
+   * Ping a host from the visitor's browser/network only.
+   * - Latency: direct request to the Oman URL (never via GitHub or API proxy)
+   * - Public IP: DNS A-record resolved in the browser (shown on the card)
    */
   async function probeHost(url, label, title) {
     var host = '';
@@ -1295,38 +1314,45 @@
       host = '';
       origin = String(url || '').trim();
     }
-    var started = performance.now();
+
+    var ipPromise = resolvePublicIp(host);
+    var target = origin || url;
     var online = false;
     var error = '';
+    var httpStatus = null;
+    var latencyMs = null;
     var controller = new AbortController();
     var timer = setTimeout(function () {
       controller.abort();
     }, 8000);
-    var target = origin || url;
-    var bust = (target.indexOf('?') >= 0 ? '&' : '?') + '_ping=' + Date.now();
-    var ipPromise = resolvePublicIp(host);
 
-    async function attempt(method) {
+    async function pingOnce(method) {
+      var bust = (target.indexOf('?') >= 0 ? '&' : '?') + '_ping=' + Date.now() + Math.random().toString(16).slice(2);
+      var started = performance.now();
       await fetch(target + bust, {
         method: method,
         mode: 'no-cors',
         cache: 'no-store',
         credentials: 'omit',
         redirect: 'follow',
+        referrerPolicy: 'no-referrer',
         signal: controller.signal,
       });
+      // Opaque success still means the browser reached the host on the user's network.
+      return Math.round(performance.now() - started);
     }
 
     try {
       try {
-        await attempt('HEAD');
+        latencyMs = await pingOnce('HEAD');
       } catch (headErr) {
         if (controller.signal.aborted) throw headErr;
-        await attempt('GET');
+        latencyMs = await pingOnce('GET');
       }
       online = true;
     } catch (e) {
       online = false;
+      latencyMs = null;
       if (controller.signal.aborted) {
         error = 'Timed out';
       } else {
@@ -1335,13 +1361,14 @@
     } finally {
       clearTimeout(timer);
     }
-    var ms = Math.round(performance.now() - started);
+
     var ip = null;
     try {
       ip = await ipPromise;
     } catch (e2) {
       ip = null;
     }
+
     return {
       id: label,
       title: title || '',
@@ -1349,8 +1376,8 @@
       host: host,
       ip: ip,
       online: online,
-      httpStatus: null,
-      latencyMs: online ? ms : null,
+      httpStatus: httpStatus,
+      latencyMs: online ? latencyMs : null,
       error: error,
       checkedAt: isoNow(),
       checkedFrom: 'browser',
@@ -1360,13 +1387,19 @@
   async function probeAllHosts() {
     var hosts = await loadHosts();
     var related = await loadRelatedHosts();
-    var hostJobs = hosts.map(function (item) {
-      return probeHost(item.url, item.id, item.title);
-    });
-    var relatedJobs = related.map(function (item) {
-      return probeHost(item.url, item.id, item.title);
-    });
-    var results = await Promise.all([Promise.all(hostJobs), Promise.all(relatedJobs)]);
+    // All pings run in the visitor's browser, in parallel, straight to each Oman URL.
+    var results = await Promise.all([
+      Promise.all(
+        hosts.map(function (item) {
+          return probeHost(item.url, item.id, item.title);
+        })
+      ),
+      Promise.all(
+        related.map(function (item) {
+          return probeHost(item.url, item.id, item.title);
+        })
+      ),
+    ]);
     return { ok: true, hosts: results[0], relatedHosts: results[1] };
   }
 
