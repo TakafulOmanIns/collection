@@ -259,9 +259,14 @@ class APIPlayground {
 
     async loadHosts() {
         try {
-            const response = await fetch(`admin-api.php?action=hosts&t=${Date.now()}`);
-            if (!response.ok) throw new Error('hosts');
-            const data = await response.json();
+            let data;
+            if (window.StaticAPI && typeof window.StaticAPI.loadHostsPublic === 'function') {
+                data = await window.StaticAPI.loadHostsPublic();
+            } else {
+                const response = await fetch(`collection/hosts.json?t=${Date.now()}`);
+                if (!response.ok) throw new Error('hosts');
+                data = await response.json();
+            }
             this.hosts = Array.isArray(data.hosts) && data.hosts.length ? data.hosts : this.defaultHosts();
             this.relatedHostList = Array.isArray(data.relatedHosts) ? data.relatedHosts : this.defaultRelatedHosts();
         } catch {
@@ -325,9 +330,12 @@ class APIPlayground {
         markChecking(wrap);
         markChecking(relatedWrap);
         try {
-            const response = await fetch(`admin-api.php?action=host-status&t=${Date.now()}`);
-            if (!response.ok) throw new Error('status');
-            const result = await response.json();
+            let result;
+            if (window.StaticAPI && typeof window.StaticAPI.probeHosts === 'function') {
+                result = await window.StaticAPI.probeHosts();
+            } else {
+                throw new Error('status');
+            }
             if (wrap && result.hosts && result.hosts.length) {
                 this.hosts = result.hosts.map((host) => ({ id: host.id, title: host.title, url: host.url }));
                 if (wrap.querySelectorAll('.host-card').length !== result.hosts.length) {
@@ -2694,18 +2702,11 @@ class APIPlayground {
                 throw new Error('Resolve the URL first. Set host (and other variables) in Environment.');
             }
             let data;
-            const proxied = await fetch('proxy.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            });
-            if (proxied.ok) {
-                data = await proxied.json();
-            } else if (proxied.status === 404) {
-                data = await this.directFetch(payload);
-            } else {
-                data = await proxied.json().catch(() => ({ error: `Proxy error ${proxied.status}` }));
+            if (window.StaticAPI && typeof window.StaticAPI.proxyRequest === 'function') {
+                data = await window.StaticAPI.proxyRequest(payload);
                 if (!data.body && data.error) throw new Error(data.error);
+            } else {
+                data = await this.directFetch(payload);
             }
             this.response = {
                 status: data.status,

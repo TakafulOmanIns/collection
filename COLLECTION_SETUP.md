@@ -10,12 +10,12 @@
    - Save the JSON file
 
 2. **Add to the project:**
-   - Rename the exported file to `collection.json`
-   - Place it in the root directory: `C:\xampp\htdocs\api_collection\collection.json`
+   - Prefer uploading via **Admin → Files** on the live GitHub Pages site (commits into `collection/`), **or**
+   - Place/rename the export as `collection.json` in the repo root and push to `main`
 
 3. **View your collection:**
-   - Open: `http://localhost/api_collection/`
-   - Your collection will load automatically!
+   - Locally: `python -m http.server 8080` then open `http://localhost:8080/`
+   - Live: your GitHub Pages URL after the Actions deploy finishes
 
 ## Collection Structure Support
 

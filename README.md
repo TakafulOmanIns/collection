@@ -1,134 +1,75 @@
-# Takaful Oman Insurance - API Collection Viewer
+# Takaful Oman Insurance — API Collection Viewer
 
-A modern, interactive API documentation viewer for sharing Postman collections. Built specifically for Takaful Oman Insurance SAOG.
+Static API playground and admin for Postman collections. Hosted on **GitHub Pages** (no PHP).
 
-## Features
+## Deploy on GitHub Pages
 
-- 📚 **Three-Column Layout**: Sidebar navigation, main content area, and API explorer
-- 🎨 **Dark Theme**: Modern Postman-inspired dark theme
-- 🔍 **Search Functionality**: Quickly find APIs in large collections
-- 📥 **Download Collections**: Users can download the Postman collection directly
-- 🧪 **API Testing**: Built-in API explorer to test endpoints
-- 🔗 **Shareable Links**: Share collections via URL parameters
-- 📱 **Responsive Design**: Works on different screen sizes
-
-## Usage
-
-### Option 1: Local Collection File
-
-1. Place your Postman collection JSON file as `collection.json` in the root directory
-2. Open `index.html` in a web browser
-3. The collection will load automatically
-
-### Option 2: Remote Collection URL
-
-1. Share the link with the collection parameter:
-   ```
-   https://your-domain.com/api_collection/?collection=https://example.com/collection.json
-   ```
-
-2. Users can access the collection directly via the link
-
-### Option 3: Specific Endpoint
-
-You can also link directly to a specific endpoint:
-```
-https://your-domain.com/api_collection/?collection=https://example.com/collection.json&endpoint=0
-```
-
-## Adding Your Logo
-
-1. Place your Takaful Oman Insurance logo as `logo.png` in the root directory
-2. Supported formats: PNG, JPG, SVG
-3. Recommended size: 200x60 pixels (or similar aspect ratio)
-4. If no logo is found, the text "Takaful Oman Insurance SAOG" will be displayed
-
-## Postman Collection Format
-
-The application supports standard Postman Collection v2.1 format. Your collection should include:
-
-- `info`: Collection metadata (name, description, version)
-- `item`: Array of folders and requests
-- `variable`: Collection variables (e.g., baseUrl)
-
-### Example Structure
+1. Push this repo to GitHub (`TakafulOmanIns/collection`).
+2. In the repo: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+3. The workflow in `.github/workflows/pages.yml` publishes on every push to `main`.
+4. Confirm `site-config.json` matches your repo:
 
 ```json
 {
-  "info": {
-    "name": "My API Collection",
-    "description": "Collection description"
-  },
-  "variable": [
-    {
-      "key": "baseUrl",
-      "value": "https://api.example.com"
-    }
-  ],
-  "item": [
-    {
-      "name": "Folder Name",
-      "item": [
-        {
-          "name": "Endpoint Name",
-          "request": {
-            "method": "GET",
-            "url": "{{baseUrl}}/endpoint"
-          }
-        }
-      ]
-    }
-  ]
+  "github": {
+    "owner": "TakafulOmanIns",
+    "repo": "collection",
+    "branch": "main"
+  }
 }
 ```
 
-## Customization
+Public site: `index.html`  
+Admin: `admin.html`
 
-### Colors
+## Admin saves (GitHub as the database)
 
-Edit `styles.css` and modify the CSS variables in `:root`:
+Admin reads JSON from the site and **writes by committing** to the repo through the GitHub Contents API.
 
-```css
-:root {
-    --bg-primary: #1e1e1e;
-    --accent-blue: #0070f3;
-    /* ... other variables */
-}
+You need a [fine-grained personal access token](https://github.com/settings/tokens?type=beta) with **Contents: Read and write** on this repository only.
+
+**Recommended (no token stored in the repo):**
+
+1. Set the admin password to that PAT (or keep your password and use option 2).
+2. Sign in on `admin.html` with username `admin` and the PAT as the password once you have updated `password_hash` to match — **or** keep your existing password and put the PAT in `admin-config.json` as `githubToken` (only do this if the Pages site is not public).
+
+If you log in with a password that starts with `ghp_` / `github_pat_` / `gho_` / `ghu_`, it is kept in `sessionStorage` for that browser session and used for commits.
+
+Existing login credentials from the PHP era still work (same bcrypt hash in `admin-config.json`).
+
+## Local preview
+
+Serve the folder over HTTP (browsers block `fetch` of local JSON from `file://`):
+
+```bash
+python -m http.server 8080
 ```
 
-### Branding
+Then open `http://localhost:8080/` and `http://localhost:8080/admin.html`.
 
-- Logo: Replace `logo.png`
-- Company name: Edit the logo text in `index.html`
-- Footer: Modify the "Powered by" text in `index.html`
+Admin **saves** from localhost still commit to GitHub (same token rules). They do not write to your disk.
 
-## Browser Support
+## Try-it / API calls
 
-- Chrome (latest)
-- Firefox (latest)
-- Edge (latest)
-- Safari (latest)
+There is no server-side CORS proxy anymore. The playground calls APIs **directly from the browser**. Target APIs must allow CORS from your Pages origin (or be same-site). If a call fails with a network/CORS error, enable CORS on that API or use a private proxy you control.
 
-## File Structure
+## Host status cards
 
-```
-api_collection/
-├── index.html          # Main HTML file
-├── styles.css          # All styling
-├── app.js              # Application logic
-├── collection.json     # Sample Postman collection
-├── logo.png           # Company logo (add your own)
-└── README.md          # This file
-```
+Status checks run in the browser (`no-cors` probes). You get online/offline and latency; public IP and HTTP status codes are not available without a server.
 
-## Development
+## Main files
 
-To run locally:
-
-1. Use a local web server (XAMPP, WAMP, or Python's http.server)
-2. Navigate to the directory in your browser
-3. For XAMPP: `http://localhost/api_collection/`
+| File | Role |
+|------|------|
+| `index.html` / `app.js` | Public playground |
+| `admin.html` / `admin.js` | Admin UI |
+| `static-api.js` | Replaces former PHP API |
+| `github-store.js` | GitHub Contents API helper |
+| `admin-config.json` | Admin username + password hash |
+| `site-config.json` | GitHub owner / repo / branch |
+| `products.json` | Product catalog |
+| `collection/` | Active collection, envs, docs, hosts |
 
 ## License
 
-© 2024 Takaful Oman Insurance SAOG. All rights reserved.
+© Takaful Oman Insurance SAOG. All rights reserved.

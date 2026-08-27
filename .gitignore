@@ -16,7 +16,7 @@ Thumbs.db
 # collection.json
 
 # Admin local config (optional override)
-# admin-config.php
+# admin-config.json  — do not commit real githubToken if the Pages site is public
 
 # Collection backups
 backups/*.json

@@ -88,30 +88,19 @@
     }
 
     async api(action, { method = 'GET', body, file } = {}) {
-        const options = { method, credentials: 'same-origin' };
-        if (file) {
-            const data = new FormData();
-            data.append('file', file);
-            if (body && typeof body === 'object') {
-                Object.keys(body).forEach((key) => {
-                    if (body[key] != null) data.append(key, body[key]);
-                });
+        if (!window.StaticAPI || typeof window.StaticAPI.handle !== 'function') {
+            throw new Error('Static API is not loaded');
+        }
+        try {
+            return await window.StaticAPI.handle(action, { method, body, file });
+        } catch (err) {
+            const status = err && err.status;
+            if (status === 401 && action !== 'login' && action !== 'session') {
+                this.showLogin();
+                throw new Error(err.message || 'Please sign in');
             }
-            options.body = data;
-        } else if (body) {
-            options.headers = { 'Content-Type': 'application/json' };
-            options.body = JSON.stringify(body);
+            throw new Error(err.message || `Request failed (${status || 500})`);
         }
-        const response = await fetch(`admin-api.php?action=${encodeURIComponent(action)}`, options);
-        const data = await response.json().catch(() => ({ error: 'Invalid response' }));
-        if (response.status === 401 && action !== 'login' && action !== 'session') {
-            this.showLogin();
-            throw new Error(data.error || 'Please sign in');
-        }
-        if (!response.ok) {
-            throw new Error(data.error || `Request failed (${response.status})`);
-        }
-        return data;
     }
 
     async init() {
@@ -4486,13 +4475,11 @@
             if (!/^https?:\/\//i.test(payload.url) || payload.url.indexOf('{{') >= 0) {
                 throw new Error('Enter a full http(s) URL, or map an environment with host so {{variables}} can be replaced.');
             }
-            const proxied = await fetch('proxy.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            });
-            const data = await proxied.json().catch(() => ({ error: `Proxy error ${proxied.status}` }));
-            if (!proxied.ok && data.error && data.body == null) throw new Error(data.error);
+            if (!window.StaticAPI || typeof window.StaticAPI.proxyRequest !== 'function') {
+                throw new Error('Static API is not loaded');
+            }
+            const data = await window.StaticAPI.proxyRequest(payload);
+            if (data.error && data.body == null) throw new Error(data.error);
             this.epResponse = {
                 status: data.status,
                 body: data.body != null ? data.body : (data.error || data),
